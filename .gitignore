@@ -90,4 +90,4 @@ ENV/
 
 secret
 cookie
-img/
+*.jpg
