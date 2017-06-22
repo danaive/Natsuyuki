@@ -51,24 +51,21 @@ def read_cookie():
 
 def check_login(today):
     cookies = read_cookie()
-    res = []
     for ck in cookies:
         s = session()
         x = s.post(urljoin(domain, 'freeBook/ajaxGetTime'),
                    data = {'id': '3010', 'date': today},
                    cookies = {'JSESSIONID': ck})
         if 'login' in x.url:
-            res.append(False)
-        else:
-            res.append(True)
-    return res
+            return False
+    return True
 
 
 @app.route('/')
 def index():
     tz = timezone('Asia/Shanghai')
     dt = datetime.now(tz)
-    if not any(check_login(dt.strftime('%Y-%m-%d'))):
+    if not check_login(dt.strftime('%Y-%m-%d')):
         return redirect(url_for('login'))
     opts = range(8 * 60 + 30, 22 * 60, 30)
     if dt.hour * 60 + dt.minute >= 22 * 60 + 30:
