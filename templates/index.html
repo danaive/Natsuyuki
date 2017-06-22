@@ -17,7 +17,7 @@
     <body>
         <div class="container">
             <div class="row" style="margin-top: 20px">
-                <div class="col-xs-9 col-md-4">
+                <div class="col-xs-12 col-md-6">
                     <div class="input-group has-primary">
                         <select id="start" class="form-control">
                             {% for opt in opts %}
@@ -33,12 +33,27 @@
                         </select>
                     </div>
                 </div>
-                <div class="col-xs-3 col-md-2">
-                    <button id="query" class="btn btn-primary btn-block" data-date="{{date}}">查询</button>
+            </div>
+            <div class="row" style="margin-top: 20px">
+                <div class="col-xs-12 col-md-6">
+                    <div class="btn-group">
+                        <button id="qry0" class="btn btn-primary" data-date="{{date}}">Dan 查询</button>
+                        <button id="qry1" class="btn btn-primary" data-date="{{date}}">Iris 查询</button>
+                        <button id="qry2" class="btn btn-primary" data-date="{{date}}">双座查询</button>
+                    </div>
                 </div>
             </div>
-
             <div class="row" style="margin-top: 50px">
+                <div class="col-xs-12 col-md-6">
+                    <div class="panel panel-info">
+                        <table class="table">
+                            <tbody id="bookedtb">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
                 <div class="col-xs-12 col-md-6">
                     <div class="panel panel-info">
                         <table class="table">
@@ -50,7 +65,7 @@
                                     <th></th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="querytb">
                                 <tr class="clone" data-start data-end data-id1 data-id2>
                                     <td></td><td></td><td></td>
                                     <td>
@@ -100,28 +115,34 @@
                             $(this).hide();
                     });
                 });
-                $("#query").on("click", function() {
+                $("[id^='qry']").on("click", function() {
+                    var _this = $(this);
+                    var usr = _this.attr("id").substr(3)
                     $.post(
                         "/query",
                         {
-                            date: $("#query").data("date"),
+                            date: _this.data("date"),
                             start: $("#start").val(),
-                            end: $("#end").val()
+                            end: $("#end").val(),
+                            usr: usr
                         },
                         function(data) {
-                            $("tbody").children().not(".clone").remove();
+                            $("#querytb").children().not(".clone").remove();
                             $.each(data, function(i, item) {
                                 var span0 = calctime(item.span[0]);
                                 var span1 = calctime(item.span[1]);
                                 var tr = $("tr.clone").clone();
-                                tr.children("td").eq(0).text("#");
-                                tr.children("td").eq(1).text(item.seat[0] + '/' + item.seat[1]);
+                                tr.children("td").eq(0).text(item.pos);
+                                if(item.seat[0] == item.seat[1])
+                                    tr.children("td").eq(1).text(item.seat[0])
+                                else
+                                    tr.children("td").eq(1).text(item.seat[0] + '/' + item.seat[1]);
                                 tr.children("td").eq(2).text(span0 + ' - ' + span1);
                                 tr.data("start", item.span[0]);
                                 tr.data("end", item.span[1]);
                                 tr.data("id0", item.id[0]);
                                 tr.data("id1", item.id[1]);
-                                tr.removeClass("clone").appendTo("tbody");
+                                tr.removeClass("clone").appendTo("#querytb");
                             });
                             $("button.btn-info").on("click", function() {
                                 var tr = $(this).parents("tr");
@@ -147,7 +168,8 @@
                                             end: tr.data("end"),
                                             id0: tr.data("id0"),
                                             id1: tr.data("id1"),
-                                            date: $("#query").data("date")
+                                            date: $("#qry2").data("date"),
+                                            usr: usr
                                         },
                                         function(data) {
                                             if(data.msg == "ok")
@@ -166,6 +188,40 @@
                         }
                     );
                 });
+                $.post(
+                    "/check_booked",
+                    {},
+                    function(data) {
+                        $("#bookedtb").empty();
+                        $.each(data, function(i, item) {
+                            var s = "<tr><td><strong>" + item.name + "</strong>&nbsp;&nbsp;&nbsp;&nbsp;" + item.time + "<br />" + item.pos + "</td><td>";
+                            s += "<button data-link='" + item.link + "' class='btn btn-danger btn-xs btn-block'>撤销</button></td></tr>";
+                            $("#bookedtb").append(s);
+                        });
+                        $(".btn-danger").on("click", function() {
+                            var link = $(this).data("link");
+                            var _this = $(this);
+                            $.post(
+                                "/cancel_booked",
+                                {link: link},
+                                function(data) {
+                                    if(data.msg == 'ok') {
+                                        swal({
+                                            title: "撤销成功",
+                                            type: "success"
+                                        });
+                                        _this.parents("tr").fadeOut();
+                                    }
+                                    else
+                                        swal({
+                                            title: "撤销失败",
+                                            type: "error"
+                                        });
+                                }
+                            );
+                        })
+                    }
+                );
             });
         </script>
     </body>

@@ -8,21 +8,22 @@ from urlparse import urljoin
 from bs4 import BeautifulSoup
 from io import BytesIO
 from PIL import Image
+from seats import seats
 import os
 
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 domain = "http://seat.lib.whu.edu.cn/"
-seats = (((3091, 3092), (99, 100)),
-         ((3093, 3094), (101, 102)),
-         ((3096, 3097), (103, 104)),
-         ((3098, 3099), (105, 106)),
-         ((3100, 3101), (107, 108)),
-         ((3105, 3106), (109, 110)),
-         ((2575, 2574), (13, 14)),
-         ((2572, 2571), (15, 16)),
-         ((2569, 3089), (17, 18)))
+# seats = (((3091, 3092), (99, 100)),
+#          ((3093, 3094), (101, 102)),
+#          ((3096, 3097), (103, 104)),
+#          ((3098, 3099), (105, 106)),
+#          ((3100, 3101), (107, 108)),
+#          ((3105, 3106), (109, 110)),
+#          ((2575, 2574), (13, 14)),
+#          ((2572, 2571), (15, 16)),
+#          ((2569, 3089), (17, 18)))
 
 
 def read_account():
@@ -50,22 +51,24 @@ def read_cookie():
 
 def check_login(today):
     cookies = read_cookie()
+    res = []
     for ck in cookies:
         s = session()
         x = s.post(urljoin(domain, 'freeBook/ajaxGetTime'),
                    data = {'id': '3010', 'date': today},
                    cookies = {'JSESSIONID': ck})
         if 'login' in x.url:
-            return False
-    print 'done'
-    return True
+            res.append(False)
+        else:
+            res.append(True)
+    return res
 
 
 @app.route('/')
 def index():
     tz = timezone('Asia/Shanghai')
     dt = datetime.now(tz)
-    if not check_login(dt.strftime('%Y-%m-%d')):
+    if not any(check_login(dt.strftime('%Y-%m-%d'))):
         return redirect(url_for('login'))
     opts = range(8 * 60 + 30, 22 * 60, 30)
     if dt.hour * 60 + dt.minute >= 22 * 60 + 30:
@@ -113,26 +116,43 @@ def query():
     spans = {}
     s = session()
     for st in seats:
-        for idx, seat in zip(st[0], st[1]):
-            html = s.post(urljoin(domain, 'freeBook/ajaxGetTime'),
-                          data = {'id': str(idx), 'date': date},
+        html = s.post(urljoin(domain, 'freeBook/ajaxGetTime'),
+                      data = {'id': str(st[0]), 'date': date},
+                      cookies = cookies).content
+        starts = BeautifulSoup(html, 'html.parser')
+        spans[st[0]] = []
+        for link in starts.find_all('a'):
+            code = link.get('time')
+            html = s.post(urljoin(domain, 'freeBook/ajaxGetEndTime'),
+                          data = {'seat': str(st[0]), 'date': date, 'start': code},
                           cookies = cookies).content
-            starts = BeautifulSoup(html, 'html.parser')
-            spans[idx] = []
-            for link in starts.find_all('a'):
-                code = link.get('time')
-                html = s.post(urljoin(domain, 'freeBook/ajaxGetEndTime'),
-                              data = {'seat': str(idx), 'date': date, 'start': code},
-                              cookies = cookies).content
-                ends = BeautifulSoup(html, 'html.parser')
-                for link2 in ends.find_all('a'):
-                    spans[idx].append((code, link2.get('time')))
+            ends = BeautifulSoup(html, 'html.parser')
+            for link2 in ends.find_all('a'):
+                spans[st[0]].append((code, link2.get('time')))
     res = []
-    for idx, st in seats:
-        for span in spans[idx[0]]:
-            if span in spans[idx[1]] and span[0] != 'now':
-                if start <= int(span[0]) and int(span[1]) <= end:
-                    res.append({'id': idx, 'seat': st, 'span': span})
+    if request.form['usr'] == '2':
+        for i in range(0, len(seats), 2):
+            id0 = seats[i][0]
+            id1 = seats[i+1][0]
+            for span in spans[id0]:
+                if span in spans[id1] and span[0] != 'now':
+                    if start <= int(span[0]) and int(span[1]) <= end:
+                        res.append({
+                            'id': (id0, id1),
+                            'seat': (seats[i][1], seats[i+1][1]),
+                            'span': span,
+                            'pos': seats[i][2]
+                        })
+    else:
+        for st in seats:
+            for span in spans[st[0]]:
+                if span[0] != 'now' and start <= int(span[0]) and int(span[1]) <= end:
+                    res.append({
+                        'id': (st[0], st[0]),
+                        'seat': (st[1], st[1]),
+                        'span': span,
+                        'pos': st[2]
+                    })
     res.sort(key=lambda x: int(x['span'][1]) - int(x['span'][0]), reverse=True)
     return jsonify(res)
 
@@ -142,18 +162,61 @@ def book():
     idx = request.form['id0'], request.form['id1']
     cookies = read_cookie()
     s = session()
-    for i, ck in enumerate(cookies):
+    usr = int(request.form['usr'])
+    if usr == 2:
+        for i, ck in enumerate(cookies):
+            x = s.post(urljoin(domain, 'selfRes'),
+                       cookies = {'JSESSIONID': ck},
+                       data = {
+                           'date': request.form['date'],
+                           'start': request.form['start'],
+                           'end': request.form['end'],
+                           'seat': request.form['id%d' % i]
+                       })
+            if '<span style="color:red">' not in x.content:
+                return jsonify({'msg': 'fail'})
+    else:
         x = s.post(urljoin(domain, 'selfRes'),
-                   cookies = {'JSESSIONID': ck},
+                   cookies = {'JSESSIONID': cookies[usr]},
                    data = {
                        'date': request.form['date'],
                        'start': request.form['start'],
                        'end': request.form['end'],
-                       'seat': request.form['id%d' % i]
+                       'seat': request.form['id0']
                    })
         if '<span style="color:red">' not in x.content:
             return jsonify({'msg': 'fail'})
     return jsonify({'msg': 'ok'})
+
+
+@app.route('/check_booked', methods=['POST'])
+def check_booked():
+    cookies = read_cookie()
+    name = ('Dan', 'Iris')
+    res = []
+    for ck, usr in zip(cookies, name):
+        s = session()
+        html = s.get(urljoin(domain, 'history?type=SEAT'),
+                     cookies = {'JSESSIONID': ck}).content
+        soup = BeautifulSoup(html, 'html.parser').find('a', attrs={'class': 'showLoading'})
+        if soup:
+            link = soup.get('href')
+            time = soup.parent.find('dt').string
+            pos = soup.parent.find('a').string.strip()
+            res.append({'name': usr, 'link': link, 'time': time, 'pos': pos})
+    return jsonify(res)
+
+
+@app.route('/cancel_booked', methods=['POST'])
+def cancel_booked():
+    link = request.form['link']
+    ck, _ = read_cookie()
+    s = session()
+    x = s.post(urljoin(domain, link), cookies={'JSESSIONID': ck})
+    if 'login' in x.url:
+        return jsonify({'msg': 'fail'})
+    return jsonify({'msg': 'ok'})
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0')
