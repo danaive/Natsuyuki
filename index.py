@@ -26,8 +26,8 @@ def index():
     if dt.hour * 60 + dt.minute >= 22 * 60:
         date = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
     else:
-        now = dt.hour * 60 + dt.minute
-        opts = filter(lambda x: x >= now, opts)
+        # now = dt.hour * 60 + dt.minute
+        # opts = filter(lambda x: x >= now, opts)
         date = dt.strftime('%Y-%m-%d')
     return render_template('index.html', date=date, opts=opts)
 
