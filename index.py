@@ -8,57 +8,12 @@ from urlparse import urljoin
 from bs4 import BeautifulSoup
 from io import BytesIO
 from PIL import Image
-from seats import seats
-import os
+from seats import *
+from utils import *
+import os, json
 
 
 app = Flask(__name__)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-domain = "http://seat.lib.whu.edu.cn/"
-# seats = (((3091, 3092), (99, 100)),
-#          ((3093, 3094), (101, 102)),
-#          ((3096, 3097), (103, 104)),
-#          ((3098, 3099), (105, 106)),
-#          ((3100, 3101), (107, 108)),
-#          ((3105, 3106), (109, 110)),
-#          ((2575, 2574), (13, 14)),
-#          ((2572, 2571), (15, 16)),
-#          ((2569, 3089), (17, 18)))
-
-
-def read_account():
-    with open(os.path.join(BASE_DIR, 'secret'), 'r') as f:
-        user0, pass0 = f.readline().strip().split(':')
-        user1, pass1 = f.readline().strip().split(':')
-    return (user0, pass0), (user1, pass1)
-
-
-def write_cookie(ck):
-    with open(os.path.join(BASE_DIR, 'cookie'), 'w') as f:
-        f.write(ck[0])
-        f.write(ck[1])
-
-
-def read_cookie():
-    try:
-        with open(os.path.join(BASE_DIR, 'cookie'), 'r') as f:
-            ck0 = f.read(32)
-            ck1 = f.read(32)
-        return ck0, ck1
-    except:
-        return 'no file', 'or empty file'
-
-
-def check_login(today):
-    cookies = read_cookie()
-    for ck in cookies:
-        s = session()
-        x = s.post(urljoin(domain, 'freeBook/ajaxGetTime'),
-                   data = {'id': '3010', 'date': today},
-                   cookies = {'JSESSIONID': ck})
-        if 'login' in x.url:
-            return False
-    return True
 
 
 @app.route('/')
@@ -68,7 +23,7 @@ def index():
     if not check_login(dt.strftime('%Y-%m-%d')):
         return redirect(url_for('login'))
     opts = range(8 * 60 + 30, 22 * 60, 30)
-    if dt.hour * 60 + dt.minute >= 22 * 60 + 30:
+    if dt.hour * 60 + dt.minute >= 22 * 60:
         date = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
     else:
         now = dt.hour * 60 + dt.minute
@@ -120,19 +75,22 @@ def query():
         spans[st[0]] = []
         for link in starts.find_all('a'):
             code = link.get('time')
-            html = s.post(urljoin(domain, 'freeBook/ajaxGetEndTime'),
-                          data = {'seat': str(st[0]), 'date': date, 'start': code},
-                          cookies = cookies).content
-            ends = BeautifulSoup(html, 'html.parser')
-            for link2 in ends.find_all('a'):
-                spans[st[0]].append((code, link2.get('time')))
+            if code != 'now' and int(code) >= start:
+                html = s.post(urljoin(domain, 'freeBook/ajaxGetEndTime'),
+                              data = {'seat': str(st[0]), 'date': date, 'start': code},
+                              cookies = cookies).content
+                ends = BeautifulSoup(html, 'html.parser')
+                for link2 in ends.find_all('a'):
+                    code2 = link2.get('time')
+                    if int(code2) <= end:# and int(code2) - int(code) >= 120:
+                        spans[st[0]].append((code, code2))
     res = []
     if request.form['usr'] == '2':
         for i in range(0, len(seats), 2):
             id0 = seats[i][0]
             id1 = seats[i+1][0]
             for span in spans[id0]:
-                if span in spans[id1] and span[0] != 'now':
+                if span in spans[id1]:
                     if start <= int(span[0]) and int(span[1]) <= end:
                         res.append({
                             'id': (id0, id1),
@@ -157,33 +115,10 @@ def query():
 @app.route('/book', methods=['POST'])
 def book():
     idx = request.form['id0'], request.form['id1']
-    cookies = read_cookie()
-    s = session()
-    usr = int(request.form['usr'])
-    if usr == 2:
-        for i, ck in enumerate(cookies):
-            x = s.post(urljoin(domain, 'selfRes'),
-                       cookies = {'JSESSIONID': ck},
-                       data = {
-                           'date': request.form['date'],
-                           'start': request.form['start'],
-                           'end': request.form['end'],
-                           'seat': request.form['id%d' % i]
-                       })
-            if '<span style="color:red">' not in x.content:
-                return jsonify({'msg': 'fail'})
-    else:
-        x = s.post(urljoin(domain, 'selfRes'),
-                   cookies = {'JSESSIONID': cookies[usr]},
-                   data = {
-                       'date': request.form['date'],
-                       'start': request.form['start'],
-                       'end': request.form['end'],
-                       'seat': request.form['id0']
-                   })
-        if '<span style="color:red">' not in x.content:
-            return jsonify({'msg': 'fail'})
-    return jsonify({'msg': 'ok'})
+    span = request.form['start'], request.form['end']
+    if do_book(request.form['usr'], idx, span, request.form['date']):
+        return jsonify({'msg': 'ok'})
+    return jsonify({'msg': 'fail'})
 
 
 @app.route('/check_booked', methods=['POST'])
@@ -213,6 +148,23 @@ def cancel_booked():
     if 'login' in x.url:
         return jsonify({'msg': 'fail'})
     return jsonify({'msg': 'ok'})
+
+
+@app.route('/biu', methods=['POST'])
+def delegate():
+    try:
+        task = json.load(open('task'))
+    except:
+        task = {'0': None, '1': None, '2': None}
+    start = request.form['start']
+    end = request.form['end']
+    usr = request.form['usr']
+    task[usr] = {'start': start, 'end': end}
+    try:
+        json.dump(task, open('task', 'w'))
+        return jsonify({'msg': 'ok'})
+    except:
+        return jsonify({'msg': 'fail'})
 
 
 if __name__ == '__main__':

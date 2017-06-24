@@ -90,4 +90,5 @@ ENV/
 
 secret
 cookie
+task
 *.jpg
