@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 
 from flask import Flask, render_template, redirect, url_for, request, jsonify
 from datetime import datetime, timedelta
@@ -26,8 +26,6 @@ def index():
     if dt.hour * 60 + dt.minute >= 22 * 60:
         date = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
     else:
-        # now = dt.hour * 60 + dt.minute
-        # opts = filter(lambda x: x >= now, opts)
         date = dt.strftime('%Y-%m-%d')
     return render_template('index.html', date=date, opts=opts)
 
@@ -46,7 +44,6 @@ def login():
         write_cookie(cookies)
         return render_template('login.html', imgs=imgs)
     else:
-        # map(os.remove, os.listdir(os.path.join(BASE_DIR, 'static/img/')))
         account = read_account()
         cookies = read_cookie()
         captcha = request.form['captcha0'], request.form['captcha1']
@@ -82,7 +79,7 @@ def query():
                 ends = BeautifulSoup(html, 'html.parser')
                 for link2 in ends.find_all('a'):
                     code2 = link2.get('time')
-                    if int(code2) <= end:# and int(code2) - int(code) >= 120:
+                    if int(code2) <= end and int(code2) - int(code) >= 120:
                         spans[st[0]].append((code, code2))
     res = []
     if request.form['usr'] == '2':
@@ -101,7 +98,7 @@ def query():
     else:
         for st in seats:
             for span in spans[st[0]]:
-                if span[0] != 'now' and start <= int(span[0]) and int(span[1]) <= end:
+                if start <= int(span[0]) and int(span[1]) <= end:
                     res.append({
                         'id': (st[0], st[0]),
                         'seat': (st[1], st[1]),
