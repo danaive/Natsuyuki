@@ -14,6 +14,7 @@ if __name__ == '__main__':
         task = json.load(open('task'))
         assert task['0'] or task['1'] or task['2']
     except:
+        print 'Load json failed.'
         exit(0)
     tz = timezone('Asia/Shanghai')
     dt = datetime.now(tz)
@@ -23,10 +24,13 @@ if __name__ == '__main__':
             usr = key
     span = task[usr]['start'], task[usr]['end']
     tag = time.time()
+    print 'Start booking...'
     while True:
         for idx in favor:
+            print 'booking seat %s at %s' % (idx, datetime.now(tz).strftime('%H:%M:%S'))
             if do_book(usr, idx, span, date):
                 tag = None
+                print 'success'
                 break
         if not tag or time.time() - tag >= 360.0:
             break
