@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 
-from requests import session
+import json
+import os
+import time
 from datetime import datetime, timedelta
+
 from pytz import timezone
 from requests import session
+
 from seats import *
 from utils import *
-import os, json, time
-
 
 if __name__ == '__main__':
     try:

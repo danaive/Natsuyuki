@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-from requests import session
-from urlparse import urljoin
 import os
+from urlparse import urljoin
 
+from requests import session
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 domain = "http://seat.lib.whu.edu.cn/"

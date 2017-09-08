@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 
-from flask import Flask, render_template, redirect, url_for, request, jsonify
+import json
+import os
 from datetime import datetime, timedelta
+from io import BytesIO
+from urlparse import urljoin
+
+from bs4 import BeautifulSoup
+from PIL import Image
 from pytz import timezone
 from requests import session
-from urlparse import urljoin
-from bs4 import BeautifulSoup
-from io import BytesIO
-from PIL import Image
+
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from seats import *
 from utils import *
-import os, json
-
 
 app = Flask(__name__)
 
